@@ -49,6 +49,7 @@ namespace ifc2gltf
             var context = new Xbim3DModelContext(model);
             context.CreateContext();
 
+            AllMeshes(context);
             var ifcProject = model.Instances.OfType<IIfcProject>().FirstOrDefault();
             var ifcSite = model.Instances.OfType<IIfcSite>().FirstOrDefault();
             var ifcBuilding = ifcSite.Buildings.FirstOrDefault();
@@ -101,6 +102,37 @@ namespace ifc2gltf
             var scene = new SceneBuilder();
             scene.AddRigidMesh(mesh, Matrix4x4.Identity);
             return scene;
+        }
+
+        public static void AllMeshes(Xbim3DModelContext context)
+        {
+            // Reference: https://stackoverflow.com/a/57042462/6908282
+
+            List<XbimShapeGeometry> geometrys = context.ShapeGeometries().ToList();
+            List<XbimShapeInstance> instances = context.ShapeInstances().ToList();
+
+            //Check all the instances
+            foreach (var instance in instances)
+            {
+                var transfor = instance.Transformation; //Transformation matrix (location point inside)
+
+                XbimShapeGeometry geometry = context.ShapeGeometry(instance);   //Instance's geometry
+                XbimRect3D box = geometry.BoundingBox; //bounding box you need
+
+                byte[] data = ((IXbimShapeGeometryData)geometry).ShapeData;
+
+                //If you want to get all the faces and trinagulation use this
+                using (var stream = new MemoryStream(data))
+                {
+                    using (var reader = new BinaryReader(stream))
+                    {
+                        var mesh = reader.ReadShapeTriangulation();
+
+                        List<XbimFaceTriangulation> faces = mesh.Faces as List<XbimFaceTriangulation>;
+                        List<XbimPoint3D> vertices = mesh.Vertices as List<XbimPoint3D>;
+                    }
+                }
+            }
         }
     }
 }
