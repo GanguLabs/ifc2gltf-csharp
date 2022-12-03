@@ -49,7 +49,7 @@ namespace ifc2gltf
             var context = new Xbim3DModelContext(model);
             context.CreateContext();
 
-            AllMeshes(context);
+            List<XbimShapeTriangulation> getAllMeshes =  AllMeshes(context);
             var ifcProject = model.Instances.OfType<IIfcProject>().FirstOrDefault();
             var ifcSite = model.Instances.OfType<IIfcSite>().FirstOrDefault();
             var ifcBuilding = ifcSite.Buildings.FirstOrDefault();
@@ -66,16 +66,15 @@ namespace ifc2gltf
                 }
             }
 
-            var mesh = new MeshBuilder<VERTEX>("mesh");
             var material1 = new MaterialBuilder()
                .WithDoubleSide(true)
                .WithMetallicRoughnessShader()
                .WithChannelParam("BaseColor", new Vector4(1, 0, 0, 1));
 
-
-            foreach (var meshBim in spaceMeshes)
+            var scene = new SceneBuilder();
+            foreach (XbimShapeTriangulation meshBim in getAllMeshes)
             {
-
+                var mesh = new MeshBuilder<VERTEX>("mesh");
                 var faces = (List<XbimFaceTriangulation>)meshBim.Faces;
                 var vertices = (List<XbimPoint3D>)meshBim.Vertices;
 
@@ -97,20 +96,23 @@ namespace ifc2gltf
                             new VERTEX((float)p2.X, (float)p2.Z, (float)p2.Y));
                     }
                 }
+
+                scene.AddRigidMesh(mesh, Matrix4x4.Identity);
+
             }
 
-            var scene = new SceneBuilder();
-            scene.AddRigidMesh(mesh, Matrix4x4.Identity);
             return scene;
         }
 
-        public static void AllMeshes(Xbim3DModelContext context)
+        public static List<XbimShapeTriangulation> AllMeshes(Xbim3DModelContext context)
         {
             // Reference: https://stackoverflow.com/a/57042462/6908282
 
             List<XbimShapeGeometry> geometrys = context.ShapeGeometries().ToList();
             List<XbimShapeInstance> instances = context.ShapeInstances().ToList();
 
+            List<XbimShapeTriangulation> allMeshesList = new List<XbimShapeTriangulation>();
+            Dictionary<string, XbimShapeTriangulation> allMeshes = new Dictionary<string, XbimShapeTriangulation>();
             //Check all the instances
             foreach (var instance in instances)
             {
@@ -130,9 +132,14 @@ namespace ifc2gltf
 
                         List<XbimFaceTriangulation> faces = mesh.Faces as List<XbimFaceTriangulation>;
                         List<XbimPoint3D> vertices = mesh.Vertices as List<XbimPoint3D>;
+
+                        allMeshes[instance.IfcTypeId.ToString()] = mesh;
+                        allMeshesList.Add(mesh);
                     }
                 }
             }
+
+            return allMeshesList;
         }
     }
 }
