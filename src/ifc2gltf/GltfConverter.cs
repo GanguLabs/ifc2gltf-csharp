@@ -64,7 +64,7 @@ namespace ifc2gltf
             //Check all the instances
             foreach (var instance in instances)
             {
-                var transfor = instance.Transformation; //Transformation matrix (location point inside)
+                var transform = instance.Transformation; //Transformation matrix (location point inside)
 
                 XbimShapeGeometry geometry = context.ShapeGeometry(instance);   //Instance's geometry
                 XbimRect3D box = geometry.BoundingBox; //bounding box you need
@@ -78,14 +78,14 @@ namespace ifc2gltf
                     using (var reader = new BinaryReader(stream))
                     {
                         var mesh = reader.ReadShapeTriangulation();
+                        XbimShapeTriangulation transformedMesh = mesh.Transform(transformation);
+                        List<XbimFaceTriangulation> faces = transformedMesh.Faces as List<XbimFaceTriangulation>;
+                        List<XbimPoint3D> vertices = transformedMesh.Vertices as List<XbimPoint3D>;
 
-                        List<XbimFaceTriangulation> faces = mesh.Faces as List<XbimFaceTriangulation>;
-                        List<XbimPoint3D> vertices = mesh.Vertices as List<XbimPoint3D>;
+                        allMeshes[instance.IfcTypeId.ToString()] = transformedMesh;
+                        allMeshesList.Add(transformedMesh);
 
-                        allMeshes[instance.IfcTypeId.ToString()] = mesh;
-                        allMeshesList.Add(mesh);
-
-                        var glbMesh = GenerateMesh(mesh, material1);
+                        var glbMesh = GenerateMesh(transformedMesh, material1);
 
                         scene.AddRigidMesh(glbMesh, Matrix4x4.Identity);
                     }
