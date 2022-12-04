@@ -10,6 +10,7 @@ using Xbim.Common.XbimExtensions;
 using Xbim.Ifc;
 using Xbim.Ifc4.Interfaces;
 using Xbim.ModelGeometry.Scene;
+using AlphaMode = SharpGLTF.Materials.AlphaMode;
 using VERTEX = SharpGLTF.Geometry.VertexTypes.VertexPosition;
 
 namespace ifc2gltf
@@ -19,6 +20,7 @@ namespace ifc2gltf
         private static XbimShapeTriangulation GetMeshes (Xbim3DModelContext context, IIfcProduct product)
         {
             XbimShapeTriangulation ifcMesh = null;;
+            
             var productShape =
                 context.ShapeInstancesOf(product)
                     .Where(p => p.RepresentationType != XbimGeometryRepresentationType.OpeningsAndAdditionsExcluded)
@@ -49,10 +51,7 @@ namespace ifc2gltf
             var scene = new SceneBuilder();
             var context = new Xbim3DModelContext(model);
             context.CreateContext();
-            var material1 = new MaterialBuilder()
-               .WithDoubleSide(true)
-               .WithMetallicRoughnessShader()
-               .WithChannelParam("BaseColor", new Vector4(1, 0, 0, 1));
+              
 
             // Reference: https://stackoverflow.com/a/57042462/6908282
 
@@ -64,11 +63,13 @@ namespace ifc2gltf
             //Check all the instances
             foreach (var instance in instances)
             {
-                var transform = instance.Transformation; //Transformation matrix (location point inside)
-
+                var material = GetMaterial(model, instance);
+                // var material = model.Instances.FirstOrDefault<IIfcElement>(d => d.GlobalId == instance._expressTypeId);
+                // var materials = instance.HasAssociations.OfType<IIfcRelAssociatesMaterial>();
                 XbimShapeGeometry geometry = context.ShapeGeometry(instance);   //Instance's geometry
                 XbimRect3D box = geometry.BoundingBox; //bounding box you need
                 XbimMatrix3D transformation = instance.Transformation;
+                
 
                 byte[] data = ((IXbimShapeGeometryData)geometry).ShapeData;
 
@@ -85,7 +86,7 @@ namespace ifc2gltf
                         allMeshes[instance.IfcTypeId.ToString()] = transformedMesh;
                         allMeshesList.Add(transformedMesh);
 
-                        var glbMesh = GenerateMesh(transformedMesh, material1);
+                        var glbMesh = GenerateMesh(transformedMesh, material);
 
                         scene.AddRigidMesh(glbMesh, Matrix4x4.Identity);
                     }
@@ -93,6 +94,36 @@ namespace ifc2gltf
             }
 
             return scene;
+        }
+
+        private static MaterialBuilder GetMaterial(IfcStore model, XbimShapeInstance instance)
+        {
+            //reference: https://stackoverflow.com/a/42852848/6908282
+            var material = new MaterialBuilder()
+               .WithDoubleSide(true)
+               .WithMetallicRoughnessShader();
+            var transform = instance.Transformation; //Transformation matrix (location point inside)
+            var sStyle = model.Instances[instance.StyleLabel] as IIfcSurfaceStyle;
+            if (sStyle != null)
+            {
+                var styleData = sStyle?.Styles.FirstOrDefault() as IIfcSurfaceStyleRendering;
+                float transparency = (float)styleData.Transparency == 0 ? 1 : (float)styleData.Transparency;
+                var color = new Vector4(
+                    (float)styleData.SurfaceColour.Red,
+                    (float)styleData.SurfaceColour.Green,
+                    (float)styleData.SurfaceColour.Blue,
+                    transparency
+                    );
+
+                material.WithBaseColor(color);
+                if (transparency < 1 && transparency != 0) material.WithAlpha(AlphaMode.BLEND);
+            }
+            else
+            {
+                // material1.WithChannelParam("BaseColor", new Vector4(1, 0, 0, 1));
+            }
+
+            return material;
         }
 
         public static IMeshBuilder<MaterialBuilder> GenerateMesh(XbimShapeTriangulation meshBim, MaterialBuilder material1)
